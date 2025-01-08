@@ -1,0 +1,34 @@
+run = "npm run build && npm start"
+hidden = [".config", "package-lock.json"]
+entrypoint = "src/index.js"
+
+[nix]
+channel = "stable-22_11"
+
+[env]
+PATH = "/root/${REPL_SLUG}/node_modules/.bin:${PATH}"
+XDG_CONFIG_HOME = "/root/.config"
+npm_config_prefix = "/root/.config"
+
+[packager]
+language = "nodejs"
+
+[packager.features]
+packageSearch = true
+guessImports = true
+enabledForHosting = true
+
+[languages.javascript]
+pattern = "**/{*.js,*.jsx}"
+syntax = "javascript"
+
+[languages.javascript.languageServer]
+start = ["typescript-language-server", "--stdio"]
+
+[deployment]
+deploymentTarget = "static"
+publicDir = "build"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
