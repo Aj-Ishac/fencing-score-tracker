@@ -1,29 +1,26 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
+import Navigation from './components/Navigation';
 import StudentRegistration from './pages/StudentRegistration';
 import BoutTracker from './pages/BoutTracker';
 import Statistics from './pages/Statistics';
-import { StudentProvider } from './context/StudentContext';
-import { BoutProvider } from './context/BoutContext';
+import { DataProvider } from './context/DataContext';
 import './App.css';
 
 function App() {
   return (
-    <StudentProvider>
-      <BoutProvider>
-        <div className="App">
-          <Navbar />
+    <DataProvider>
+      <div className="App">
+        <Navigation />
+        <div className="content">
           <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/register" element={<StudentRegistration />} />
-            <Route path="/bout" element={<BoutTracker />} />
+            <Route path="/" element={<StudentRegistration />} />
+            <Route path="/bout-tracker" element={<BoutTracker />} />
             <Route path="/statistics" element={<Statistics />} />
           </Routes>
         </div>
-      </BoutProvider>
-    </StudentProvider>
+      </div>
+    </DataProvider>
   );
 }
 

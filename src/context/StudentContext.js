@@ -38,8 +38,45 @@ export function StudentProvider({ children }) {
     }));
   };
 
+  const editBout = (boutId, newScores) => {
+    const { score1, score2 } = newScores;
+    
+    setStudents(students.map(student => {
+      const updatedBouts = student.bouts.map(bout => {
+        if (bout.id === boutId) {
+          const isFirstFencer = bout.scoreFor === bout.scoreAgainst ? score1 > score2 : bout.scoreFor > bout.scoreAgainst;
+          return {
+            ...bout,
+            scoreFor: isFirstFencer ? score1 : score2,
+            scoreAgainst: isFirstFencer ? score2 : score1,
+            won: isFirstFencer ? score1 > score2 : score2 > score1
+          };
+        }
+        return bout;
+      });
+
+      return {
+        ...student,
+        bouts: updatedBouts
+      };
+    }));
+  };
+
+  const deleteBout = (boutId) => {
+    setStudents(students.map(student => ({
+      ...student,
+      bouts: student.bouts.filter(bout => bout.id !== boutId)
+    })));
+  };
+
   return (
-    <StudentContext.Provider value={{ students, addStudent, addBout }}>
+    <StudentContext.Provider value={{ 
+      students, 
+      addStudent, 
+      addBout,
+      editBout,
+      deleteBout
+    }}>
       {children}
     </StudentContext.Provider>
   );
