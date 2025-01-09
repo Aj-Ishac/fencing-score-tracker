@@ -20,10 +20,6 @@ function StudentRegistration() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (fencers.length >= 50) {
-      alert('Maximum number of students (50) reached.');
-      return;
-    }
     try {
       await addFencer(formData);
       setFormData({
@@ -38,12 +34,6 @@ function StudentRegistration() {
   };
 
   const generateTenDummyStudents = async () => {
-    const remainingSlots = 50 - fencers.length;
-    if (remainingSlots < 10) {
-      alert(`Can only add ${remainingSlots} more students.`);
-      return;
-    }
-
     const firstNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Sam', 'Drew', 'Avery', 'Quinn'];
     const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
     const clubs = ['Salle Green', 'Blue Blades', 'Red Fencers', 'Gold Club', 'Silver Academy'];
@@ -52,7 +42,6 @@ function StudentRegistration() {
     try {
       const getRandomItem = (array) => array[Math.floor(Math.random() * array.length)];
       
-      // Create all 10 dummy fencers at once
       const dummyFencers = Array.from({ length: 10 }, () => ({
         name: `${getRandomItem(firstNames)} ${getRandomItem(lastNames)}`,
         age: Math.floor(Math.random() * (30 - 15) + 15).toString(),
@@ -60,7 +49,6 @@ function StudentRegistration() {
         club: getRandomItem(clubs)
       }));
 
-      // Add all fencers in one batch operation
       await addMultipleFencers(dummyFencers);
     } catch (err) {
       console.error('Error generating dummy students:', err);
@@ -80,7 +68,7 @@ function StudentRegistration() {
       <h1 className="text-airbnb-hof text-3xl font-bold mb-6">Student Registration</h1>
       
       <div className="bg-airbnb-rausch/10 text-airbnb-hof p-4 rounded-airbnb mb-8 font-medium">
-        Registered Students: {fencers.length}/50
+        Registered Students: {fencers.length}
       </div>
 
       <div className="bg-white p-6 rounded-airbnb shadow-airbnb hover:shadow-airbnb-hover transition-shadow duration-200 mb-8">
@@ -135,36 +123,21 @@ function StudentRegistration() {
             </select>
           </div>
 
-          <div className="mb-6">
-            <label className="block mb-2 text-airbnb-hof text-sm font-medium">
-              Club
-            </label>
-            <input
-              type="text"
-              id="club"
-              name="club"
-              value={formData.club}
-              onChange={handleChange}
-              required
-              className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof placeholder-airbnb-foggy focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition"
-            />
-          </div>
-
-          <div className="flex gap-3 justify-end mt-8">
+          <div className="flex gap-3 w-full mt-8">
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-[80%] px-6 py-3 bg-airbnb-rausch text-white rounded-airbnb hover:bg-airbnb-rausch/90 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              Register Student
+            </button>
             <button
               type="button"
               onClick={generateTenDummyStudents}
-              disabled={loading || fencers.length > 40}
-              className="px-6 py-3 bg-white border border-airbnb-hof text-airbnb-hof rounded-airbnb hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              disabled={loading}
+              className="w-[20%] px-2 py-3 bg-white border border-airbnb-hof text-airbnb-hof rounded-airbnb hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
             >
               Generate 10 Dummy Students
-            </button>
-            <button 
-              type="submit" 
-              disabled={loading || fencers.length >= 50}
-              className="px-6 py-3 bg-airbnb-rausch text-white rounded-airbnb hover:bg-airbnb-rausch/90 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-            >
-              Register Student
             </button>
           </div>
         </form>

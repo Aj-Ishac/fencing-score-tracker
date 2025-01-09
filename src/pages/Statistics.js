@@ -54,21 +54,18 @@ function Statistics() {
       matrix[fencer1.id] = {};
       fencers.forEach(fencer2 => {
         matrix[fencer1.id][fencer2.id] = {
-          wins: 0,
-          total: 0
+          pointsScored: 0,
+          totalBouts: 0
         };
       });
     });
 
     bouts.forEach(bout => {
       const { fencer1_id, fencer2_id, score1, score2 } = bout;
-      matrix[fencer1_id][fencer2_id].total += 1;
-      matrix[fencer2_id][fencer1_id].total += 1;
-      if (score1 > score2) {
-        matrix[fencer1_id][fencer2_id].wins += 1;
-      } else {
-        matrix[fencer2_id][fencer1_id].wins += 1;
-      }
+      matrix[fencer1_id][fencer2_id].pointsScored += parseInt(score1);
+      matrix[fencer2_id][fencer1_id].pointsScored += parseInt(score2);
+      matrix[fencer1_id][fencer2_id].totalBouts += 1;
+      matrix[fencer2_id][fencer1_id].totalBouts += 1;
     });
 
     return matrix;
@@ -164,7 +161,7 @@ function Statistics() {
   const matrix = generateConfusionMatrix();
   const selectedFencerStats = getFencerDetailedStats(selectedFencer?.id);
 
-  const COLORS = ['#FF5A5F', '#00A699', '#FC642D', '#484848'];
+  const COLORS = ['#00A699', '#FF5A5F', '#FC642D', '#484848'];
 
   return (
     <div className="max-w-6xl mx-auto p-6 font-airbnb">
@@ -265,10 +262,10 @@ function Statistics() {
             <h3 className="text-airbnb-hof text-lg font-semibold mb-4">Performance Over Time</h3>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={selectedFencerStats.performanceData}>
+                <LineChart data={selectedFencerStats.performanceData} margin={{ right: 30 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                  <XAxis dataKey="boutNumber" />
-                  <YAxis />
+                  <XAxis dataKey="boutNumber" label={{ value: 'Bout Number', position: 'insideBottomRight', offset: -20 }} />
+                  <YAxis label={{ value: 'Points', angle: -90, position: 'insideLeft', offset: 10 }} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'white',
@@ -278,8 +275,8 @@ function Statistics() {
                     }}
                   />
                   <Legend />
-                  <Line type="monotone" dataKey="score" name="Points Scored" stroke="#FF5A5F" />
-                  <Line type="monotone" dataKey="opponentScore" name="Points Conceded" stroke="#00A699" />
+                  <Line type="monotone" dataKey="score" name="Points Scored" stroke="#00A699" />
+                  <Line type="monotone" dataKey="opponentScore" name="Points Conceded" stroke="#FF5A5F" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -476,11 +473,11 @@ function Statistics() {
                         <td key={fencer2.id} className="px-4 py-2 text-sm text-airbnb-foggy text-center">
                           {fencer1.id === fencer2.id ? 
                             <span className="text-gray-300">-</span> : 
-                            matrix[fencer1.id][fencer2.id].total > 0 ?
-                            <span className={matrix[fencer1.id][fencer2.id].wins > matrix[fencer1.id][fencer2.id].total/2 ? 'text-airbnb-babu font-medium' : ''}>
-                              {matrix[fencer1.id][fencer2.id].wins}/{matrix[fencer1.id][fencer2.id].total}
+                            matrix[fencer1.id][fencer2.id].totalBouts > 0 ?
+                            <span className={matrix[fencer1.id][fencer2.id].pointsScored > matrix[fencer2.id][fencer1.id].pointsScored ? 'text-airbnb-babu font-medium' : ''}>
+                              {matrix[fencer1.id][fencer2.id].pointsScored === 5 ? '✓' : matrix[fencer1.id][fencer2.id].pointsScored}
                             </span> :
-                            <span className="text-gray-300">0/0</span>
+                            <span className="text-gray-300">0</span>
                           }
                         </td>
                       ))}
