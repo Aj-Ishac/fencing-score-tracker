@@ -1,81 +1,104 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { databaseService } from '../services/databaseService';
 
 const DataContext = createContext();
 
 export function DataProvider({ children }) {
   const [fencers, setFencers] = useState([]);
   const [bouts, setBouts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [nextFencerId, setNextFencerId] = useState(1);
+
+  // Initial data fetch
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [fencersData, boutsData] = await Promise.all([
+          databaseService.getFencers(),
+          databaseService.getBouts()
+        ]);
+        setFencers(fencersData);
+        setBouts(boutsData);
+      } catch (err) {
+        setError('Failed to fetch data: ' + err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const addFencer = async (fencerData) => {
     try {
-      const currentId = nextFencerId;
-      const newFencer = {
-        ...fencerData,
-        id: currentId
-      };
-      
+      setLoading(true);
+      const newFencer = await databaseService.addFencer(fencerData);
       setFencers(prev => [...prev, newFencer]);
-      setNextFencerId(prev => prev + 1);
-      
       return newFencer;
     } catch (err) {
       setError('Failed to add fencer: ' + err.message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
   const addMultipleFencers = async (fencersData) => {
     try {
-      const newFencers = fencersData.map((fencerData, index) => ({
-        ...fencerData,
-        id: nextFencerId + index
-      }));
-
+      setLoading(true);
+      const newFencers = await Promise.all(
+        fencersData.map(fencer => databaseService.addFencer(fencer))
+      );
       setFencers(prev => [...prev, ...newFencers]);
-      setNextFencerId(prev => prev + fencersData.length);
-
       return newFencers;
     } catch (err) {
       setError('Failed to add multiple fencers: ' + err.message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
   const addBout = async (boutData) => {
     try {
-      const newBout = {
-        ...boutData,
-        id: Date.now(),
-        timestamp: new Date().toISOString()
-      };
+      setLoading(true);
+      const newBout = await databaseService.addBout(boutData);
       setBouts(prev => [...prev, newBout]);
       return newBout;
     } catch (err) {
       setError('Failed to add bout: ' + err.message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
   const updateBout = async (boutId, updatedData) => {
     try {
+      setLoading(true);
+      const updatedBout = await databaseService.updateBout(boutId, updatedData);
       setBouts(prev => prev.map(bout => 
-        bout.id === boutId ? { ...bout, ...updatedData } : bout
+        bout.id === boutId ? updatedBout : bout
       ));
     } catch (err) {
       setError('Failed to update bout: ' + err.message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
   const deleteBout = async (boutId) => {
     try {
+      setLoading(true);
+      await databaseService.deleteBout(boutId);
       setBouts(prev => prev.filter(bout => bout.id !== boutId));
     } catch (err) {
       setError('Failed to delete bout: ' + err.message);
       throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
