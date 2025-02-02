@@ -10,6 +10,8 @@
   text-align: center;
   background-color: var(--background-color);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .container {
@@ -39,4 +41,9 @@
 
 .button:hover {
   background-color: var(--accent-color);
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
 } 

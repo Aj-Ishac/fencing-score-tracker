@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useData } from '../context/DataContext';
 
 function BoutTracker() {
@@ -14,7 +14,8 @@ function BoutTracker() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  const generateConfusionMatrix = () => {
+  // Memoize the confusion matrix calculation to prevent unnecessary recalculations
+  const matrix = useMemo(() => {
     const matrix = {};
     
     fencers.forEach(fencer1 => {
@@ -36,26 +37,56 @@ function BoutTracker() {
     });
 
     return matrix;
-  };
+  }, [fencers, bouts]);
 
-  const handleChange = (e) => {
+  // Memoize fencer name lookup to prevent unnecessary calculations
+  const fencerNameMap = useMemo(() => {
+    return fencers.reduce((acc, fencer) => {
+      acc[fencer.id] = fencer.name;
+      return acc;
+    }, {});
+  }, [fencers]);
+
+  const getFencerName = useCallback((id) => {
+    return fencerNameMap[id] || 'Unknown Fencer';
+  }, [fencerNameMap]);
+
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     
     // Validate score inputs
-    if ((name === 'score1' || name === 'score2') && parseInt(value) > 5) {
-      return; // Don't update if score is above 5
+    if ((name === 'score1' || name === 'score2') && value !== '') {
+      const score = parseInt(value);
+      if (score < 0 || score > 5) return;
     }
     
     // Validate fencer2 selection
     if (name === 'fencer2_id' && value === boutData.fencer1_id) {
-      return; // Don't update if same as fencer1
+      return;
     }
     
     setBoutData(prev => ({
       ...prev,
       [name]: value
     }));
-  };
+  }, [boutData.fencer1_id]);
+
+  const resetBoutForm = useCallback(() => {
+    setBoutData({
+      fencer1_id: '',
+      fencer2_id: '',
+      score1: '',
+      score2: '',
+      notes: '',
+      timestamp: new Date().toISOString()
+    });
+  }, []);
+
+  const showSuccessMessage = useCallback((message) => {
+    setSuccessMessage(message);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -64,23 +95,9 @@ function BoutTracker() {
       return;
     }
     try {
-      await addBout({
-        ...boutData,
-        score1: parseInt(boutData.score1),
-        score2: parseInt(boutData.score2),
-        timestamp: new Date().toISOString()
-      });
-      setBoutData({
-        fencer1_id: '',
-        fencer2_id: '',
-        score1: '',
-        score2: '',
-        notes: '',
-        timestamp: new Date().toISOString()
-      });
-      setSuccessMessage('Bout recorded successfully!');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
+      await addBout(boutData);
+      resetBoutForm();
+      showSuccessMessage('Bout recorded successfully!');
     } catch (err) {
       console.error('Error adding bout:', err);
     }
@@ -93,56 +110,44 @@ function BoutTracker() {
     }
 
     try {
-      // Get two random different fencers
-      const shuffledFencers = [...fencers].sort(() => Math.random() - 0.5);
-      const fencer1 = shuffledFencers[0];
-      const fencer2 = shuffledFencers[1];
-
-      // Generate random scores (0-5)
-      const score1 = Math.floor(Math.random() * 6); // 0-5
-      const score2 = Math.floor(Math.random() * 6); // 0-5
-
-      const noteTemplates = [
-        'Clean bout with good technique',
-        'Aggressive attacks from both sides',
-        'Strong defensive performance',
-        'Multiple double touches',
-        'Fast-paced exchanges',
-        'Technical bout with strategic play',
-        'Good footwork from both fencers',
-        'High intensity throughout'
-      ];
+      // Get two random different fencers using Fisher-Yates shuffle
+      const getRandomFencers = () => {
+        const indices = new Set();
+        while (indices.size < 2) {
+          indices.add(Math.floor(Math.random() * fencers.length));
+        }
+        return Array.from(indices).map(index => fencers[index]);
+      };
+      
+      const [fencer1, fencer2] = getRandomFencers();
 
       const simulatedBout = {
         fencer1_id: fencer1.id.toString(),
         fencer2_id: fencer2.id.toString(),
-        score1,
-        score2,
-        notes: noteTemplates[Math.floor(Math.random() * noteTemplates.length)],
+        score1: Math.floor(Math.random() * 6),
+        score2: Math.floor(Math.random() * 6),
+        notes: BOUT_NOTES[Math.floor(Math.random() * BOUT_NOTES.length)],
         timestamp: new Date().toISOString()
       };
 
       await addBout(simulatedBout);
-      setSuccessMessage('Bout simulated successfully!');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
+      showSuccessMessage('Bout simulated successfully!');
     } catch (err) {
       console.error('Error simulating bout:', err);
     }
   };
 
-  const setCurrentDateTime = () => {
-    setBoutData(prev => ({
-      ...prev,
-      timestamp: new Date().toISOString()
-    }));
-  };
-
-  // Helper function to find fencer name by ID
-  const getFencerName = (id) => {
-    const fencer = fencers.find(f => f.id.toString() === id.toString());
-    return fencer ? fencer.name : 'Unknown Fencer';
-  };
+  // Move note templates outside component to prevent recreation
+  const BOUT_NOTES = [
+    'Clean bout with good technique',
+    'Aggressive attacks from both sides',
+    'Strong defensive performance',
+    'Multiple double touches',
+    'Fast-paced exchanges',
+    'Technical bout with strategic play',
+    'Good footwork from both fencers',
+    'High intensity throughout'
+  ];
 
   // Helper function to format date
   const formatDate = (dateString) => {
@@ -162,8 +167,6 @@ function BoutTracker() {
   if (error) {
     return <div className="p-4 text-airbnb-rausch bg-red-50 rounded-airbnb font-airbnb">Error: {error}</div>;
   }
-
-  const matrix = generateConfusionMatrix();
 
   return (
     <div className="max-w-6xl mx-auto p-6 font-airbnb">

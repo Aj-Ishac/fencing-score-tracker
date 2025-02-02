@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell
@@ -12,32 +15,51 @@ function Statistics() {
   const getOverallStats = () => {
     const totalBouts = bouts.length;
     const studentStats = fencers.map(fencer => {
+      // Filter bouts for this fencer
       const fencerBouts = bouts.filter(bout => 
-        bout.fencer1_id === fencer.id.toString() || bout.fencer2_id === fencer.id.toString()
+        bout.fencer1_id.toString() === fencer.id.toString() || 
+        bout.fencer2_id.toString() === fencer.id.toString()
       );
       
-      const wins = fencerBouts.filter(bout => 
-        (bout.fencer1_id === fencer.id.toString() && bout.score1 > bout.score2) ||
-        (bout.fencer2_id === fencer.id.toString() && bout.score2 > bout.score1)
-      ).length;
-
-      const totalPoints = fencerBouts.reduce((sum, bout) => {
-        if (bout.fencer1_id === fencer.id.toString()) {
-          return sum + bout.score1;
+      // Calculate wins
+      const wins = fencerBouts.filter(bout => {
+        if (bout.fencer1_id.toString() === fencer.id.toString()) {
+          return parseInt(bout.score1) > parseInt(bout.score2);
         } else {
-          return sum + bout.score2;
+          return parseInt(bout.score2) > parseInt(bout.score1);
+        }
+      }).length;
+
+      // Calculate total points scored
+      const totalPoints = fencerBouts.reduce((sum, bout) => {
+        if (bout.fencer1_id.toString() === fencer.id.toString()) {
+          return sum + parseInt(bout.score1);
+        } else {
+          return sum + parseInt(bout.score2);
         }
       }, 0);
+
+      // Calculate statistics
+      const matches = fencerBouts.length;
+      const winRate = matches > 0 ? ((wins / matches) * 100).toFixed(1) : '0.0';
+      const averagePoints = matches > 0 ? (totalPoints / matches).toFixed(1) : '0.0';
 
       return {
         id: fencer.id,
         name: fencer.name,
+        matches,
         wins,
-        matches: fencerBouts.length,
-        winRate: fencerBouts.length ? (wins / fencerBouts.length * 100).toFixed(1) : 0,
-        averagePoints: fencerBouts.length ? (totalPoints / fencerBouts.length).toFixed(1) : 0,
+        winRate,
+        averagePoints
       };
-    }).sort((a, b) => b.winRate - a.winRate);
+    });
+
+    // Sort by win rate (descending) and then by average points if win rates are equal
+    studentStats.sort((a, b) => {
+      const winRateDiff = parseFloat(b.winRate) - parseFloat(a.winRate);
+      if (winRateDiff !== 0) return winRateDiff;
+      return parseFloat(b.averagePoints) - parseFloat(a.averagePoints);
+    });
 
     return {
       totalBouts,
@@ -45,6 +67,36 @@ function Statistics() {
       topFencers: studentStats.slice(0, 3),
       studentStats
     };
+  };
+
+  const downloadAsPDF = async () => {
+    const element = document.getElementById('student-performance');
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#FFFFFF',
+      logging: false,
+      onclone: (clonedDoc) => {
+        // Preserve background colors and styles in the cloned document
+        const elements = clonedDoc.getElementsByClassName('bg-gray-50');
+        for (let el of elements) {
+          el.style.backgroundColor = '#F9FAFB';
+        }
+        const charts = clonedDoc.getElementsByClassName('recharts-wrapper');
+        for (let chart of charts) {
+          chart.style.backgroundColor = '#FFFFFF';
+        }
+      }
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`${selectedFencer.name}_performance.pdf`);
   };
 
   const generateConfusionMatrix = () => {
@@ -74,21 +126,28 @@ function Statistics() {
   const getFencerDetailedStats = (fencerId) => {
     if (!fencerId) return null;
 
+    // Filter bouts for this fencer and sort by timestamp
     const fencerBouts = bouts.filter(bout => 
-      bout.fencer1_id === fencerId.toString() || bout.fencer2_id === fencerId.toString()
-    ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      bout.fencer1_id.toString() === fencerId.toString() || 
+      bout.fencer2_id.toString() === fencerId.toString()
+    ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    const wins = fencerBouts.filter(bout => 
-      (bout.fencer1_id === fencerId.toString() && bout.score1 > bout.score2) ||
-      (bout.fencer2_id === fencerId.toString() && bout.score2 > bout.score1)
-    ).length;
+    // Calculate wins and losses
+    const wins = fencerBouts.filter(bout => {
+      const isFencer1 = bout.fencer1_id.toString() === fencerId.toString();
+      return isFencer1 ? 
+        parseInt(bout.score1) > parseInt(bout.score2) : 
+        parseInt(bout.score2) > parseInt(bout.score1);
+    }).length;
 
-    // Calculate performance over time
+    // Calculate performance over time (oldest to newest)
     const performanceData = fencerBouts.map((bout, index) => {
-      const isFencer1 = bout.fencer1_id === fencerId.toString();
-      const score = isFencer1 ? bout.score1 : bout.score2;
-      const opponentScore = isFencer1 ? bout.score2 : bout.score1;
-      const won = isFencer1 ? bout.score1 > bout.score2 : bout.score2 > bout.score1;
+      const isFencer1 = bout.fencer1_id.toString() === fencerId.toString();
+      const score = parseInt(isFencer1 ? bout.score1 : bout.score2);
+      const opponentScore = parseInt(isFencer1 ? bout.score2 : bout.score1);
+      const won = isFencer1 ? 
+        parseInt(bout.score1) > parseInt(bout.score2) : 
+        parseInt(bout.score2) > parseInt(bout.score1);
       
       return {
         boutNumber: index + 1,
@@ -97,19 +156,21 @@ function Statistics() {
         pointDiff: score - opponentScore,
         won,
         date: new Date(bout.timestamp).toLocaleDateString(),
-        opponent: isFencer1 ? getFencerName(bout.fencer2_id) : getFencerName(bout.fencer1_id)
+        opponent: getFencerName(isFencer1 ? bout.fencer2_id : bout.fencer1_id)
       };
     });
 
     // Calculate level-based performance
     const levelPerformance = {};
     fencerBouts.forEach(bout => {
-      const isFencer1 = bout.fencer1_id === fencerId.toString();
+      const isFencer1 = bout.fencer1_id.toString() === fencerId.toString();
       const opponentId = isFencer1 ? bout.fencer2_id : bout.fencer1_id;
       const opponent = fencers.find(f => f.id.toString() === opponentId.toString());
-      const won = isFencer1 ? bout.score1 > bout.score2 : bout.score2 > bout.score1;
+      const won = isFencer1 ? 
+        parseInt(bout.score1) > parseInt(bout.score2) : 
+        parseInt(bout.score2) > parseInt(bout.score1);
       
-      if (opponent) {
+      if (opponent?.level) {
         if (!levelPerformance[opponent.level]) {
           levelPerformance[opponent.level] = { total: 0, wins: 0 };
         }
@@ -118,11 +179,11 @@ function Statistics() {
       }
     });
 
-    // Calculate average points scored and conceded
+    // Calculate points statistics
     const pointsStats = fencerBouts.reduce((acc, bout) => {
-      const isFencer1 = bout.fencer1_id === fencerId.toString();
-      const scored = isFencer1 ? bout.score1 : bout.score2;
-      const conceded = isFencer1 ? bout.score2 : bout.score1;
+      const isFencer1 = bout.fencer1_id.toString() === fencerId.toString();
+      const scored = parseInt(isFencer1 ? bout.score1 : bout.score2);
+      const conceded = parseInt(isFencer1 ? bout.score2 : bout.score1);
       
       return {
         totalScored: acc.totalScored + scored,
@@ -131,16 +192,18 @@ function Statistics() {
       };
     }, { totalScored: 0, totalConceded: 0, matches: 0 });
 
+    const totalBouts = fencerBouts.length;
+
     return {
-      totalBouts: fencerBouts.length,
+      totalBouts,
       wins,
-      losses: fencerBouts.length - wins,
-      winRate: fencerBouts.length ? (wins / fencerBouts.length * 100).toFixed(1) : 0,
-      averagePointsScored: (pointsStats.totalScored / (pointsStats.matches || 1)).toFixed(1),
-      averagePointsConceded: (pointsStats.totalConceded / (pointsStats.matches || 1)).toFixed(1),
+      losses: totalBouts - wins,
+      winRate: totalBouts > 0 ? ((wins / totalBouts) * 100).toFixed(1) : '0.0',
+      averagePointsScored: totalBouts > 0 ? (pointsStats.totalScored / totalBouts).toFixed(1) : '0.0',
+      averagePointsConceded: totalBouts > 0 ? (pointsStats.totalConceded / totalBouts).toFixed(1) : '0.0',
       performanceData,
       levelPerformance,
-      recentForm: performanceData.slice(-5).map(bout => bout.won)
+      recentForm: performanceData.slice(-5).map(bout => bout.won).reverse()
     };
   };
 
@@ -373,12 +436,22 @@ function Statistics() {
         <>
           {/* Win Rates Chart */}
           <div className="bg-white p-6 rounded-airbnb shadow-airbnb mb-8">
-            <h2 className="text-airbnb-hof text-xl font-semibold mb-6">Win Rates</h2>
+            <h2 className="text-airbnb-hof text-xl font-semibold mb-6">Win Rates (%)</h2>
             <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.studentStats}>
+                <BarChart data={stats.studentStats} margin={{ bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-                  <XAxis dataKey="name" />
+                  <XAxis 
+                    dataKey="name" 
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                    tick={{ 
+                      dy: 10,
+                      dx: -5
+                    }}
+                  />
                   <YAxis />
                   <Tooltip 
                     contentStyle={{ 
@@ -388,7 +461,6 @@ function Statistics() {
                       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                     }}
                   />
-                  <Legend />
                   <Bar dataKey="winRate" name="Win Rate (%)" fill="#FF5A5F" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

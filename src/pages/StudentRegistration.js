@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 
 function StudentRegistration() {
+  const navigate = useNavigate();
   const { fencers, addFencer, addMultipleFencers, loading, error } = useData();
   const [formData, setFormData] = useState({
     name: '',
     age: '',
-    level: 'Beginner',
-    club: ''
+    level: 'Beginner'
   });
 
   const handleChange = (e) => {
@@ -25,8 +26,7 @@ function StudentRegistration() {
       setFormData({
         name: '',
         age: '',
-        level: 'Beginner',
-        club: ''
+        level: 'Beginner'
       });
     } catch (err) {
       console.error('Error adding fencer:', err);
@@ -36,7 +36,6 @@ function StudentRegistration() {
   const generateTenDummyStudents = async () => {
     const firstNames = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Sam', 'Drew', 'Avery', 'Quinn'];
     const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
-    const clubs = ['Salle Green', 'Blue Blades', 'Red Fencers', 'Gold Club', 'Silver Academy'];
     const levels = ['Beginner', 'Intermediate', 'Advanced'];
 
     try {
@@ -45,14 +44,17 @@ function StudentRegistration() {
       const dummyFencers = Array.from({ length: 10 }, () => ({
         name: `${getRandomItem(firstNames)} ${getRandomItem(lastNames)}`,
         age: Math.floor(Math.random() * (30 - 15) + 15).toString(),
-        level: getRandomItem(levels),
-        club: getRandomItem(clubs)
+        level: getRandomItem(levels)
       }));
 
       await addMultipleFencers(dummyFencers);
     } catch (err) {
       console.error('Error generating dummy students:', err);
     }
+  };
+
+  const handleFencerClick = (fencerId) => {
+    navigate(`/statistics?fencer=${fencerId}`);
   };
 
   if (loading) {
@@ -143,21 +145,44 @@ function StudentRegistration() {
         </form>
       </div>
 
-      <div className="mt-12">
-        <h2 className="text-airbnb-hof text-2xl font-semibold mb-6">Registered Students</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {fencers.map(student => (
-            <div key={student.id} className="bg-white p-6 rounded-airbnb shadow-airbnb hover:shadow-airbnb-hover transition-shadow duration-200">
-              <h3 className="text-airbnb-hof font-medium mb-4">
-                <span className="text-airbnb-babu font-mono">#{student.id}</span> {student.name}
-              </h3>
-              <div className="space-y-2 text-sm text-airbnb-foggy">
-                <p>Age: {student.age}</p>
-                <p>Level: {student.level}</p>
-                <p>Club: {student.club}</p>
-              </div>
-            </div>
-          ))}
+      <div className="mt-8 bg-white rounded-airbnb shadow-airbnb">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-airbnb-hof">Registered Fencers</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">ID</th>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">Age</th>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">Level</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {fencers.map(fencer => (
+                <tr key={fencer.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-airbnb-babu font-mono">#{fencer.id}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button 
+                      onClick={() => handleFencerClick(fencer.id)}
+                      className="text-airbnb-hof hover:text-airbnb-babu font-medium transition-colors"
+                    >
+                      {fencer.name}
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy">
+                    {fencer.age}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy">
+                    {fencer.level}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

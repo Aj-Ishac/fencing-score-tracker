@@ -1,10 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY
+const supabaseServiceKey = process.env.REACT_APP_SUPABASE_SERVICE_KEY
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
   throw new Error('Missing Supabase credentials')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+// Create two clients - one for public routes and one for admin routes
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
