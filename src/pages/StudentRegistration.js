@@ -8,7 +8,8 @@ function StudentRegistration() {
   const [formData, setFormData] = useState({
     name: '',
     age: '',
-    level: 'Beginner'
+    level: 'Beginner',
+    dob: ''
   });
 
   const handleChange = (e) => {
@@ -26,7 +27,8 @@ function StudentRegistration() {
       setFormData({
         name: '',
         age: '',
-        level: 'Beginner'
+        level: 'Beginner',
+        dob: ''
       });
     } catch (err) {
       console.error('Error adding fencer:', err);
@@ -41,11 +43,33 @@ function StudentRegistration() {
     try {
       const getRandomItem = (array) => array[Math.floor(Math.random() * array.length)];
       
-      const dummyFencers = Array.from({ length: 10 }, () => ({
-        name: `${getRandomItem(firstNames)} ${getRandomItem(lastNames)}`,
-        age: Math.floor(Math.random() * (30 - 15) + 15).toString(),
-        level: getRandomItem(levels)
-      }));
+      const generateRandomDOB = () => {
+        const start = new Date(2000, 0, 1);
+        const end = new Date(2010, 11, 31);
+        const randomDate = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+        return randomDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      };
+
+      const calculateAge = (dob) => {
+        const today = new Date();
+        const birthDate = new Date(dob);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      };
+
+      const dummyFencers = Array.from({ length: 10 }, () => {
+        const dob = generateRandomDOB();
+        return {
+          name: `${getRandomItem(firstNames)} ${getRandomItem(lastNames)}`,
+          dob: dob,
+          age: calculateAge(dob).toString(),
+          level: getRandomItem(levels)
+        };
+      });
 
       await addMultipleFencers(dummyFencers);
     } catch (err) {
@@ -109,6 +133,21 @@ function StudentRegistration() {
 
           <div className="mb-6">
             <label className="block mb-2 text-airbnb-hof text-sm font-medium">
+              Date of Birth
+            </label>
+            <input
+              type="date"
+              id="dob"
+              name="dob"
+              value={formData.dob}
+              onChange={handleChange}
+              required
+              className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof placeholder-airbnb-foggy focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label className="block mb-2 text-airbnb-hof text-sm font-medium">
               Experience Level
             </label>
             <select
@@ -147,25 +186,25 @@ function StudentRegistration() {
 
       <div className="mt-8 bg-white rounded-airbnb shadow-airbnb">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-airbnb-hof">Registered Fencers</h2>
+          <h2 className="text-xl font-semibold text-airbnb-hof">Current Session Registered Fencers</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">ID</th>
-                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">Age</th>
-                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">Level</th>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider text-center">ID</th>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider text-center">Name</th>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider text-center">Age</th>
+                <th className="px-6 py-3 text-xs font-medium text-airbnb-foggy uppercase tracking-wider text-center">Level</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {fencers.map(fencer => (
                 <tr key={fencer.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
                     <span className="text-airbnb-babu font-mono">#{fencer.id}</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
                     <button 
                       onClick={() => handleFencerClick(fencer.id)}
                       className="text-airbnb-hof hover:text-airbnb-babu font-medium transition-colors"
@@ -173,10 +212,10 @@ function StudentRegistration() {
                       {fencer.name}
                     </button>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy text-center">
                     {fencer.age}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy text-center">
                     {fencer.level}
                   </td>
                 </tr>

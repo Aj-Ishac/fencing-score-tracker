@@ -1,8 +1,16 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useData } from '../context/DataContext';
+import { useSession } from '../context/SessionContext';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../services/supabaseClient';
 
 function BoutTracker() {
+  const { activeSession, setActiveSession } = useSession();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { fencers, bouts, addBout, loading, error } = useData();
+  const [sessionFencers, setSessionFencers] = useState([]);
   const [boutData, setBoutData] = useState({
     fencer1_id: '',
     fencer2_id: '',
@@ -14,13 +22,48 @@ function BoutTracker() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  useEffect(() => {
+    if (activeSession) {
+      fetchSessionFencers();
+    } else {
+      setSessionFencers([]);
+    }
+  }, [activeSession]);
+
+  const fetchSessionFencers = async () => {
+    if (!activeSession) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('session_fencers')
+        .select(`
+          fencer_id,
+          fencers (*)
+        `)
+        .eq('session_id', activeSession.id);
+
+      if (error) throw error;
+      
+      setSessionFencers(data.map(sf => sf.fencers));
+      
+      // Clear selected fencers if they're not in the session
+      setBoutData(prev => ({
+        ...prev,
+        fencer1_id: prev.fencer1_id && data.some(sf => sf.fencer_id.toString() === prev.fencer1_id) ? prev.fencer1_id : '',
+        fencer2_id: prev.fencer2_id && data.some(sf => sf.fencer_id.toString() === prev.fencer2_id) ? prev.fencer2_id : ''
+      }));
+    } catch (err) {
+      console.error('Error fetching session fencers:', err);
+    }
+  };
+
   // Memoize the confusion matrix calculation to prevent unnecessary recalculations
   const matrix = useMemo(() => {
     const matrix = {};
     
-    fencers.forEach(fencer1 => {
+    sessionFencers.forEach(fencer1 => {
       matrix[fencer1.id] = {};
-      fencers.forEach(fencer2 => {
+      sessionFencers.forEach(fencer2 => {
         matrix[fencer1.id][fencer2.id] = {
           pointsScored: 0,
           totalBouts: 0
@@ -29,15 +72,19 @@ function BoutTracker() {
     });
 
     bouts.forEach(bout => {
-      const { fencer1_id, fencer2_id, score1, score2 } = bout;
-      matrix[fencer1_id][fencer2_id].pointsScored += parseInt(score1);
-      matrix[fencer2_id][fencer1_id].pointsScored += parseInt(score2);
-      matrix[fencer1_id][fencer2_id].totalBouts += 1;
-      matrix[fencer2_id][fencer1_id].totalBouts += 1;
+      // Only count bouts between session fencers
+      if (sessionFencers.some(f => f.id.toString() === bout.fencer1_id) && 
+          sessionFencers.some(f => f.id.toString() === bout.fencer2_id)) {
+        const { fencer1_id, fencer2_id, score1, score2 } = bout;
+        matrix[fencer1_id][fencer2_id].pointsScored += parseInt(score1);
+        matrix[fencer2_id][fencer1_id].pointsScored += parseInt(score2);
+        matrix[fencer1_id][fencer2_id].totalBouts += 1;
+        matrix[fencer2_id][fencer1_id].totalBouts += 1;
+      }
     });
 
     return matrix;
-  }, [fencers, bouts]);
+  }, [sessionFencers, bouts]);
 
   // Memoize fencer name lookup to prevent unnecessary calculations
   const fencerNameMap = useMemo(() => {
@@ -46,6 +93,12 @@ function BoutTracker() {
       return acc;
     }, {});
   }, [fencers]);
+
+  // Filter bouts for current session
+  const sessionBouts = useMemo(() => {
+    if (!activeSession) return [];
+    return bouts.filter(bout => bout.session_id === activeSession.id);
+  }, [bouts, activeSession]);
 
   const getFencerName = useCallback((id) => {
     return fencerNameMap[id] || 'Unknown Fencer';
@@ -90,48 +143,58 @@ function BoutTracker() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (boutData.fencer1_id === boutData.fencer2_id) {
-      alert('Please select different fencers');
+    if (!activeSession) {
+      showSuccessMessage("Please start a session before recording bouts");
       return;
     }
+    
     try {
-      await addBout(boutData);
+      // Ensure session_id is included in the bout data
+      const boutWithSession = {
+        ...boutData,
+        session_id: activeSession.id,
+        timestamp: new Date().toISOString()
+      };
+      
+      const newBout = await addBout(boutWithSession);
       resetBoutForm();
-      showSuccessMessage('Bout recorded successfully!');
+      showSuccessMessage("Bout recorded successfully!");
     } catch (err) {
-      console.error('Error adding bout:', err);
+      console.error('Error recording bout:', err);
     }
   };
 
   const simulateRandomBout = async () => {
-    if (fencers.length < 2) {
-      alert('Need at least 2 registered fencers to simulate a bout');
+    if (!activeSession) {
+      showSuccessMessage("Please start a session before simulating bouts");
+      return;
+    }
+
+    if (sessionFencers.length < 2) {
+      showSuccessMessage("Need at least 2 fencers in the session to simulate a bout");
       return;
     }
 
     try {
-      // Get two random different fencers using Fisher-Yates shuffle
-      const getRandomFencers = () => {
-        const indices = new Set();
-        while (indices.size < 2) {
-          indices.add(Math.floor(Math.random() * fencers.length));
-        }
-        return Array.from(indices).map(index => fencers[index]);
-      };
-      
-      const [fencer1, fencer2] = getRandomFencers();
+      // Get two random fencers from session fencers
+      const shuffled = [...sessionFencers].sort(() => 0.5 - Math.random());
+      const [fencer1, fencer2] = shuffled.slice(0, 2);
+
+      // Generate random scores (one must be 5, the other less than 5)
+      const score1 = Math.random() < 0.5 ? 5 : Math.floor(Math.random() * 5);
+      const score2 = score1 === 5 ? Math.floor(Math.random() * 5) : 5;
 
       const simulatedBout = {
         fencer1_id: fencer1.id.toString(),
         fencer2_id: fencer2.id.toString(),
-        score1: Math.floor(Math.random() * 6),
-        score2: Math.floor(Math.random() * 6),
-        notes: BOUT_NOTES[Math.floor(Math.random() * BOUT_NOTES.length)],
+        score1,
+        score2,
+        session_id: activeSession.id,
         timestamp: new Date().toISOString()
       };
 
-      await addBout(simulatedBout);
-      showSuccessMessage('Bout simulated successfully!');
+      const newBout = await addBout(simulatedBout);
+      showSuccessMessage(`Simulated bout: ${fencer1.name} (${score1}) vs ${fencer2.name} (${score2})`);
     } catch (err) {
       console.error('Error simulating bout:', err);
     }
@@ -160,6 +223,35 @@ function BoutTracker() {
     });
   };
 
+  const handleCreateAndNavigate = async (e) => {
+    e.preventDefault();
+    try {
+      const sessionId = Date.now();
+      const sessionName = new Date().toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Set the active session in context without persisting to DB yet
+      setActiveSession({ 
+        id: sessionId, 
+        name: sessionName,
+        created_by: user.id,
+        student_count: 0,
+        isTemporary: true  // Flag to indicate this session hasn't been persisted
+      });
+      
+      navigate('/sessions');
+    } catch (err) {
+      console.error('Error creating session:', err);
+      setSuccessMessage('Failed to create session. Please try again.');
+      setShowSuccess(true);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center p-4 text-airbnb-foggy font-airbnb">Loading...</div>;
   }
@@ -169,53 +261,53 @@ function BoutTracker() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 font-airbnb">
-
-      <div className="bg-white p-6 rounded-airbnb shadow-airbnb hover:shadow-airbnb-hover transition-shadow duration-200 mb-8 h-[calc(100vh-theme(spacing.28))] flex flex-col">
-        <h1 className="text-airbnb-hof text-3xl font-bold mb-12">Bout Tracker</h1>
-        
-        {/* Success Notification */}
-        {showSuccess && (
-          <div className="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-airbnb shadow-lg transition-opacity duration-500 flex items-center" 
-               role="alert">
-            <span className="mr-2">{successMessage}</span>
-            <button 
-              onClick={() => setShowSuccess(false)}
-              className="text-green-700 hover:text-green-900 ml-auto"
+    <div className="max-w-6xl mx-auto p-6 space-y-8 font-airbnb">
+      <div className="flex justify-between items-center">
+        <h1 className="text-airbnb-hof text-3xl font-bold">Bout Tracker</h1>
+        <div className="text-airbnb-foggy">
+          {activeSession ? (
+            <span className="text-airbnb-babu font-medium">
+              Current Session: {activeSession.name}
+            </span>
+          ) : (
+            <a 
+              href="#" 
+              onClick={handleCreateAndNavigate}
+              className="text-red-500 hover:text-red-600 cursor-pointer underline"
             >
-              ×
-            </button>
-          </div>
-        )}
+              No Session Active - Click to Start One
+            </a>
+          )}
+        </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col justify-between flex-grow">
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="space-y-6 mb-48">  {/* First fencer group */}
-              <div>
-                <label htmlFor="fencer1_id" className="block mb-2 text-airbnb-hof text-sm font-medium">
-                  Fencer 1
-                </label>
+      {/* Main bout tracking form */}
+      <div className="bg-white p-6 rounded-airbnb shadow-airbnb">
+        {!activeSession ? (
+          <div className="text-center py-8 text-airbnb-foggy">
+            Please start a session to record bouts.
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Fencer Selection Row */}
+            <div className="grid grid-cols-2 gap-16 relative">
+              {/* Fencer 1 Column */}
+              <div className="space-y-4">
                 <select
                   id="fencer1_id"
                   name="fencer1_id"
                   value={boutData.fencer1_id}
                   onChange={handleChange}
                   required
-                  className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition appearance-none bg-white"
+                  className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition appearance-none"
                 >
                   <option value="">Select Fencer 1</option>
-                  {fencers.map(fencer => (
+                  {sessionFencers.map(fencer => (
                     <option key={fencer.id} value={fencer.id}>
-                      #{fencer.id} {fencer.name}
+                      {fencer.name}
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label htmlFor="score1" className="block mb-2 text-airbnb-hof text-sm font-medium">
-                  Score
-                </label>
                 <input
                   type="number"
                   id="score1"
@@ -225,39 +317,37 @@ function BoutTracker() {
                   required
                   min="0"
                   max="5"
+                  placeholder="Score"
                   className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof placeholder-airbnb-foggy focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition"
                 />
               </div>
-            </div>
 
-            <div className="space-y-6">  {/* Second fencer group - removed mb-auto */}
-              <div>
-                <label htmlFor="fencer2_id" className="block mb-2 text-airbnb-hof text-sm font-medium">
-                  Fencer 2
-                </label>
+              {/* VS Divider */}
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                <div className="bg-white">
+                  <span className="text-xl font-bold text-airbnb-rausch">VS</span>
+                </div>
+              </div>
+
+              {/* Fencer 2 Column */}
+              <div className="space-y-4">
                 <select
                   id="fencer2_id"
                   name="fencer2_id"
                   value={boutData.fencer2_id}
                   onChange={handleChange}
                   required
-                  className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition appearance-none bg-white"
+                  className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition appearance-none"
                 >
                   <option value="">Select Fencer 2</option>
-                  {fencers
+                  {sessionFencers
                     .filter(fencer => fencer.id.toString() !== boutData.fencer1_id)
                     .map(fencer => (
                       <option key={fencer.id} value={fencer.id}>
-                        #{fencer.id} {fencer.name}
+                        {fencer.name}
                       </option>
                     ))}
                 </select>
-              </div>
-
-              <div>
-                <label htmlFor="score2" className="block mb-2 text-airbnb-hof text-sm font-medium">
-                  Score
-                </label>
                 <input
                   type="number"
                   id="score2"
@@ -267,30 +357,30 @@ function BoutTracker() {
                   required
                   min="0"
                   max="5"
+                  placeholder="Score"
                   className="w-full p-3 border border-gray-300 rounded-airbnb text-airbnb-hof placeholder-airbnb-foggy focus:border-airbnb-babu focus:ring-1 focus:ring-airbnb-babu outline-none transition"
                 />
               </div>
             </div>
-          </div>
 
-          <div className="flex gap-3 mt-6">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-[0.8] px-6 py-3 bg-airbnb-rausch text-white rounded-airbnb hover:bg-airbnb-rausch/90 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-            >
-              Record Bout
-            </button>
-            <button
-              type="button"
-              onClick={simulateRandomBout}
-              disabled={loading || fencers.length < 2}
-              className="flex-[0.2] px-6 py-3 bg-white border border-airbnb-hof text-airbnb-hof rounded-airbnb hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-            >
-              Simulate
-            </button>
-          </div>
-        </form>
+            {/* Record and Simulate Buttons */}
+            <div className="flex justify-center gap-4 mt-6">
+              <button
+                type="submit"
+                className="w-3/4 px-8 py-3 bg-airbnb-rausch text-white rounded-airbnb hover:bg-airbnb-rausch/90 transition text-sm font-medium"
+              >
+                Record
+              </button>
+              <button
+                type="button"
+                onClick={simulateRandomBout}
+                className="w-1/4 px-8 py-3 bg-gray-200 text-gray-700 rounded-airbnb hover:bg-gray-300 transition text-sm font-medium"
+              >
+                Simulate
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       <div className="flex-1">
@@ -301,7 +391,7 @@ function BoutTracker() {
               <thead>
                 <tr>
                   <th className="px-4 py-2 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">Fencer</th>
-                  {fencers.map(fencer => (
+                  {sessionFencers.map(fencer => (
                     <th key={fencer.id} className="px-4 py-2 text-xs font-medium text-airbnb-foggy uppercase tracking-wider">
                       #{fencer.id}
                     </th>
@@ -309,7 +399,7 @@ function BoutTracker() {
                 </tr>
               </thead>
               <tbody>
-                {fencers.map(fencer1 => (
+                {sessionFencers.map(fencer1 => (
                   <tr key={fencer1.id}>
                     <td className="px-4 py-2 text-sm font-medium text-airbnb-hof whitespace-nowrap">
                       <div className="flex items-center">
@@ -317,7 +407,7 @@ function BoutTracker() {
                         <span>{fencer1.name}</span>
                       </div>
                     </td>
-                    {fencers.map(fencer2 => (
+                    {sessionFencers.map(fencer2 => (
                       <td key={fencer2.id} className="px-4 py-2 text-sm text-airbnb-foggy text-center">
                         {fencer1.id === fencer2.id ? 
                           <span className="text-gray-300">-</span> : 
@@ -349,25 +439,25 @@ function BoutTracker() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 overflow-y-auto">
-                {bouts.map(bout => {
+                {sessionBouts.map(bout => {
                   const isWinner1 = bout.score1 > bout.score2;
                   const isWinner2 = bout.score2 > bout.score1;
                   
                   return (
                     <tr key={bout.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-airbnb-foggy text-center">
                         {formatDate(bout.timestamp)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span className={`text-sm ${isWinner1 ? 'font-medium text-airbnb-hof' : 'text-airbnb-foggy'}`}>
                           <span className="text-airbnb-babu font-mono text-sm mr-2">#{bout.fencer1_id}</span>
                           {getFencerName(bout.fencer1_id)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-airbnb-hof">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-airbnb-hof text-center">
                         {bout.score1} - {bout.score2}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span className={`text-sm ${isWinner2 ? 'font-medium text-airbnb-hof' : 'text-airbnb-foggy'}`}>
                           <span className="text-airbnb-babu font-mono text-sm mr-2">#{bout.fencer2_id}</span>
                           {getFencerName(bout.fencer2_id)}
@@ -379,9 +469,12 @@ function BoutTracker() {
               </tbody>
             </table>
           </div>
-          {bouts.length === 0 && (
+          {sessionBouts.length === 0 && (
             <div className="text-center py-8 text-airbnb-foggy">
-              No bouts recorded yet. Start by recording a bout or simulate one!
+              {activeSession ? 
+                "No bouts recorded in this session yet. Start by recording a bout or simulate one!" :
+                "Please start a session to record bouts."
+              }
             </div>
           )}
         </div>

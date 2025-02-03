@@ -63,18 +63,18 @@ export function DataProvider({ children }) {
   const addBout = async (boutData) => {
     try {
       setLoading(true);
-      // Validate the bout data before sending to database
       const validatedBout = {
         ...boutData,
         fencer1_id: boutData.fencer1_id.toString(),
         fencer2_id: boutData.fencer2_id.toString(),
         score1: parseInt(boutData.score1),
         score2: parseInt(boutData.score2),
+        session_id: boutData.session_id,
         timestamp: boutData.timestamp || new Date().toISOString()
       };
       
       const newBout = await databaseService.addBout(validatedBout);
-      setBouts(prev => [newBout, ...prev]); // Add to start of array for chronological display
+      setBouts(prev => [newBout, ...prev]);
       return newBout;
     } catch (err) {
       setError('Failed to add bout: ' + err.message);

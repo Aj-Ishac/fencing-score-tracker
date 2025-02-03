@@ -34,7 +34,10 @@ class DatabaseService {
   async addBout(bout) {
     const { data, error } = await supabase
       .from('bouts')
-      .insert([bout])
+      .insert([{
+        ...bout,
+        session_id: bout.session_id
+      }])
       .select()
     
     if (error) throw error

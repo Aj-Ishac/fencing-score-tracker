@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Navigation.css';
+import { supabase } from '../services/supabaseClient';
 
 function Navigation() {
   const { user, signOut } = useAuth();
@@ -35,11 +36,14 @@ function Navigation() {
             <span>Bay Area Fencing Tracker</span>
           </div>
           <ul className="nav-links">
-            <li className={location.pathname === '/' ? 'active' : ''}>
-              <Link to="/">Student Registration</Link>
+            <li className={location.pathname === '/sessions' ? 'active' : ''}>
+              <Link to="/sessions">Sessions</Link>
             </li>
             <li className={location.pathname === '/bout-tracker' ? 'active' : ''}>
               <Link to="/bout-tracker">Bout Tracker</Link>
+            </li>
+            <li className={location.pathname === '/' ? 'active' : ''}>
+              <Link to="/">Student Registration</Link>
             </li>
             <li className={location.pathname === '/leaderboards' ? 'active' : ''}>
               <Link to="/leaderboards">Leaderboards</Link>
