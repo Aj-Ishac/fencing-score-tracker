@@ -30,58 +30,49 @@ export function DataProvider({ children }) {
     fetchData();
   }, []);
 
-  const addFencer = async (fencerData) => {
-    try {
-      setLoading(true);
-      const newFencer = await databaseService.addFencer(fencerData);
-      setFencers(prev => [...prev, newFencer]);
-      return newFencer;
-    } catch (err) {
-      setError('Failed to add fencer: ' + err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+  const addFencer = (fencerData) => {
+    // Update local state first
+    setFencers(prevFencers => [...prevFencers, { ...fencerData, id: Date.now() }]);
+    
+    // Then handle the API call
+    databaseService.addFencer(fencerData)
+      .then((newFencer) => {
+        setFencers(prev => [...prev, newFencer]);
+      })
+      .catch((err) => {
+        setError('Failed to add fencer: ' + err.message);
+      });
   };
 
-  const addMultipleFencers = async (fencersData) => {
-    try {
-      setLoading(true);
-      const newFencers = await Promise.all(
-        fencersData.map(fencer => databaseService.addFencer(fencer))
-      );
-      setFencers(prev => [...prev, ...newFencers]);
-      return newFencers;
-    } catch (err) {
-      setError('Failed to add multiple fencers: ' + err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+  const addMultipleFencers = (fencersData) => {
+    // Update local state first
+    setFencers(prevFencers => [
+      ...prevFencers,
+      ...fencersData.map(fencer => ({ ...fencer, id: Date.now() + Math.random() }))
+    ]);
+    
+    // Then handle the API call
+    databaseService.addMultipleFencers(fencersData)
+      .then((newFencers) => {
+        setFencers(prev => [...prev, ...newFencers]);
+      })
+      .catch((err) => {
+        setError('Failed to add multiple fencers: ' + err.message);
+      });
   };
 
-  const addBout = async (boutData) => {
-    try {
-      setLoading(true);
-      const validatedBout = {
-        ...boutData,
-        fencer1_id: boutData.fencer1_id.toString(),
-        fencer2_id: boutData.fencer2_id.toString(),
-        score1: parseInt(boutData.score1),
-        score2: parseInt(boutData.score2),
-        session_id: boutData.session_id,
-        timestamp: boutData.timestamp || new Date().toISOString()
-      };
-      
-      const newBout = await databaseService.addBout(validatedBout);
-      setBouts(prev => [newBout, ...prev]);
-      return newBout;
-    } catch (err) {
-      setError('Failed to add bout: ' + err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+  const addBout = (boutData) => {
+    // Update local state first
+    setBouts(prevBouts => [...prevBouts, { ...boutData, id: Date.now() }]);
+    
+    // Then handle the API call
+    databaseService.addBout(boutData)
+      .then((newBout) => {
+        setBouts(prev => [newBout, ...prev]);
+      })
+      .catch((err) => {
+        setError('Failed to add bout: ' + err.message);
+      });
   };
 
   const updateBout = async (boutId, updatedData) => {

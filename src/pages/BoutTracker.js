@@ -193,7 +193,8 @@ function BoutTracker() {
         timestamp: new Date().toISOString()
       };
 
-      const newBout = await addBout(simulatedBout);
+      // Instead of awaiting here, we'll handle the state update in the addBout function
+      addBout(simulatedBout);
       showSuccessMessage(`Simulated bout: ${fencer1.name} (${score1}) vs ${fencer2.name} (${score2})`);
     } catch (err) {
       console.error('Error simulating bout:', err);

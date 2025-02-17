@@ -44,6 +44,51 @@ class AuthService {
     }
   }
 
+  async signUp(email, password) {
+    try {
+      // First create the user
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+
+      // If user creation was successful, create the profile using service role
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert([{
+            user_id: data.user.id,
+            email: email.toLowerCase(),
+            is_admin: false
+          }])
+          .select()
+          .single();
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          throw profileError;
+        }
+      }
+
+      return data;
+    } catch (err) {
+      console.error('Signup error:', err);
+      throw err;
+    }
+  }
+
+  async signIn(email, password) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (error) throw error;
+    return data;
+  }
+
   async signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;

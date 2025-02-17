@@ -12,6 +12,7 @@ function Sessions() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const { activeSession, setActiveSession } = useSession();
+  const [selectedFencers, setSelectedFencers] = useState(new Set());
 
   useEffect(() => {
     fetchSessions();
@@ -177,8 +178,20 @@ function Sessions() {
     fetchSessions();
   };
 
-  const handleAddFencer = async (fencerId) => {
-    if (!activeSession) return;
+  const handleFencerSelect = (fencerId) => {
+    setSelectedFencers(prev => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(fencerId)) {
+        newSelected.delete(fencerId);
+      } else {
+        newSelected.add(fencerId);
+      }
+      return newSelected;
+    });
+  };
+
+  const handleAddSelectedFencers = async () => {
+    if (!activeSession || selectedFencers.size === 0) return;
 
     try {
       // If this is a temporary session, persist it first
@@ -188,28 +201,51 @@ function Sessions() {
           .insert([{
             id: activeSession.id,
             name: activeSession.name,
-            created_by: activeSession.created_by,
+            created_by: user.id,
             student_count: 0
           }]);
 
         if (sessionError) throw sessionError;
         
-        // Update active session to remove temporary flag
         setActiveSession({
           ...activeSession,
           isTemporary: false
         });
       }
 
-      const { error } = await supabase
-        .from('session_fencers')
-        .insert([{
+      // Determine which fencers to add and which to remove
+      const fencersToAdd = Array.from(selectedFencers)
+        .filter(fencerId => !sessionFencers.some(sf => sf.id === fencerId))
+        .map(fencerId => ({
           session_id: activeSession.id,
           fencer_id: fencerId
-        }]);
+        }));
 
-      if (error) throw error;
+      const fencersToRemove = Array.from(selectedFencers)
+        .filter(fencerId => sessionFencers.some(sf => sf.id === fencerId));
 
+      // Add new fencers
+      if (fencersToAdd.length > 0) {
+        const { error: addError } = await supabase
+          .from('session_fencers')
+          .insert(fencersToAdd);
+
+        if (addError) throw addError;
+      }
+
+      // Remove deselected fencers
+      if (fencersToRemove.length > 0) {
+        const { error: removeError } = await supabase
+          .from('session_fencers')
+          .delete()
+          .eq('session_id', activeSession.id)
+          .in('fencer_id', fencersToRemove);
+
+        if (removeError) throw removeError;
+      }
+
+      // Clear selections after successful update
+      setSelectedFencers(new Set());
       fetchSessionFencers(activeSession.id);
       fetchSessions();
     } catch (err) {
@@ -242,20 +278,43 @@ function Sessions() {
       {activeSession && (
         <div className="bg-white p-6 rounded-airbnb shadow-airbnb mb-8">
           <h2 className="text-xl font-semibold text-airbnb-hof mb-6">Active Session: {activeSession.name}</h2>
-          <div className="border border-gray-300 rounded-airbnb max-h-48 overflow-y-auto p-3">
-            {availableFencers
-              .filter(fencer => !sessionFencers.some(sf => sf.id === fencer.id))
-              .map(fencer => (
-                <div key={fencer.id} className="flex justify-between items-center p-2 hover:bg-gray-50">
-                  <span className="text-airbnb-hof">#{fencer.id} {fencer.name}</span>
-                  <button
-                    onClick={() => handleAddFencer(fencer.id)}
-                    className="px-3 py-1 bg-airbnb-babu text-white rounded-airbnb hover:bg-airbnb-babu/90 transition text-sm"
-                  >
-                    Add
-                  </button>
+          <div className="grid grid-cols-5 gap-4 mb-6">
+            {availableFencers.map(fencer => {
+              const [firstName, ...lastNameParts] = fencer.name.split(' ');
+              const lastName = lastNameParts.join(' ');
+              const isSelected = selectedFencers.has(fencer.id);
+              const isInSession = sessionFencers.some(sf => sf.id === fencer.id);
+              return (
+                <div
+                  key={fencer.id}
+                  onClick={() => handleFencerSelect(fencer.id)}
+                  className={`p-4 border rounded-airbnb cursor-pointer transition-colors text-center
+                    ${isInSession 
+                      ? isSelected
+                        ? 'border-airbnb-rausch bg-white' // In session but selected for removal
+                        : 'border-airbnb-rausch bg-airbnb-rausch/10' // In session
+                      : isSelected
+                        ? 'border-airbnb-rausch bg-airbnb-rausch/10' // Selected to add
+                        : 'border-gray-200 hover:bg-gray-50'}`} // Not in session or selected
+                >
+                  <div className="text-lg font-medium text-airbnb-hof">{firstName}</div>
+                  <div className="text-sm text-airbnb-foggy">{lastName}</div>
                 </div>
-              ))}
+              );
+            })}
+            {availableFencers.length === 0 && (
+              <div className="col-span-4 text-center py-8 text-airbnb-foggy">
+                No fencers available
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center">
+            <button
+              onClick={handleAddSelectedFencers}
+              className="w-full px-6 py-3 bg-airbnb-rausch text-white rounded-airbnb hover:bg-airbnb-rausch/90 transition text-sm font-medium"
+            >
+              Update Session ({selectedFencers.size ? `${selectedFencers.size} fencers selected` : 'no fencers selected'})
+            </button>
           </div>
         </div>
       )}

@@ -8,11 +8,23 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     checkUser();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        // Check admin status
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('is_admin')
+          .eq('user_id', session.user.id)
+          .single();
+        setIsAdmin(!!data?.is_admin);
+      } else {
+        setIsAdmin(false);
+      }
       setLoading(false);
     });
 
@@ -30,10 +42,22 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const signInWithMagicLink = async (email) => {
+  const signUp = async (email, password) => {
     setLoading(true);
     try {
-      await authService.signInWithMagicLink(email);
+      await authService.signUp(email, password);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signIn = async (email, password) => {
+    setLoading(true);
+    try {
+      await authService.signIn(email, password);
     } catch (err) {
       setError(err.message);
       throw err;
@@ -46,7 +70,9 @@ export function AuthProvider({ children }) {
     user,
     loading,
     error,
-    signInWithMagicLink,
+    isAdmin,
+    signUp,
+    signIn,
     signOut: authService.signOut,
   };
 

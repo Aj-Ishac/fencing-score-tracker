@@ -23,7 +23,7 @@ function StudentRegistration() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await addFencer(formData);
+      addFencer(formData);
       setFormData({
         name: '',
         age: '',
@@ -47,7 +47,7 @@ function StudentRegistration() {
         const start = new Date(2000, 0, 1);
         const end = new Date(2010, 11, 31);
         const randomDate = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
-        return randomDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        return randomDate.toISOString().split('T')[0];
       };
 
       const calculateAge = (dob) => {
@@ -71,7 +71,7 @@ function StudentRegistration() {
         };
       });
 
-      await addMultipleFencers(dummyFencers);
+      addMultipleFencers(dummyFencers);
     } catch (err) {
       console.error('Error generating dummy students:', err);
     }
