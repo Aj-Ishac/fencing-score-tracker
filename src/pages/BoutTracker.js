@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabaseClient';
 
 function BoutTracker() {
-  const { activeSession, setActiveSession } = useSession();
+  const { activeSession, setActiveSession, isGuestSession, startGuestSession } = useSession();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { fencers, bouts, addBout, loading, error } = useData();
@@ -227,23 +227,26 @@ function BoutTracker() {
   const handleCreateAndNavigate = async (e) => {
     e.preventDefault();
     try {
-      const sessionId = Date.now();
-      const sessionName = new Date().toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      if (user) {
+        const sessionId = Date.now();
+        const sessionName = new Date().toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
 
-      // Set the active session in context without persisting to DB yet
-      setActiveSession({ 
-        id: sessionId, 
-        name: sessionName,
-        created_by: user.id,
-        student_count: 0,
-        isTemporary: true  // Flag to indicate this session hasn't been persisted
-      });
+        setActiveSession({ 
+          id: sessionId, 
+          name: sessionName,
+          created_by: user.id,
+          student_count: 0,
+          isTemporary: true
+        });
+      } else {
+        startGuestSession();
+      }
       
       navigate('/sessions');
     } catch (err) {

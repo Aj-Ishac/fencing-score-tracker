@@ -63,6 +63,26 @@ class DatabaseService {
     
     if (error) throw error
   }
+
+  async addMultipleFencers(fencers) {
+    const { data, error } = await supabase
+      .from('fencers')
+      .insert(
+        fencers.map(fencer => ({
+          name: fencer.name,
+          age: parseInt(fencer.age),
+          level: fencer.level,
+          dob: fencer.dob
+        }))
+      )
+      .select();
+    
+    if (error) {
+      console.error('Database error:', error);
+      throw error;
+    }
+    return data;
+  }
 }
 
 export const databaseService = new DatabaseService() 

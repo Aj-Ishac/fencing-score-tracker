@@ -195,34 +195,44 @@ function Sessions() {
 
     try {
       // If this is a temporary session, persist it first
-      if (activeSession.isTemporary) {
-        const { error: sessionError } = await supabase
+      if (activeSession.isTemporary || !activeSession.status) {
+        const { data: sessionData, error: sessionError } = await supabase
           .from('sessions')
           .insert([{
             id: activeSession.id,
             name: activeSession.name,
-            created_by: user.id,
-            student_count: 0
-          }]);
+            created_by: user?.id || null,
+            student_count: 0,
+            status: 'active'
+          }])
+          .select()
+          .single();
 
         if (sessionError) throw sessionError;
         
         setActiveSession({
-          ...activeSession,
+          ...sessionData,
           isTemporary: false
         });
       }
 
-      // Determine which fencers to add and which to remove
+      // Get existing session_fencers to avoid duplicates
+      const { data: existingFencers, error: fetchError } = await supabase
+        .from('session_fencers')
+        .select('fencer_id')
+        .eq('session_id', activeSession.id);
+
+      if (fetchError) throw fetchError;
+
+      const existingFencerIds = new Set(existingFencers.map(f => f.fencer_id));
+
+      // Filter out fencers that are already in the session
       const fencersToAdd = Array.from(selectedFencers)
-        .filter(fencerId => !sessionFencers.some(sf => sf.id === fencerId))
+        .filter(fencerId => !existingFencerIds.has(parseInt(fencerId)))
         .map(fencerId => ({
           session_id: activeSession.id,
-          fencer_id: fencerId
+          fencer_id: parseInt(fencerId)
         }));
-
-      const fencersToRemove = Array.from(selectedFencers)
-        .filter(fencerId => sessionFencers.some(sf => sf.id === fencerId));
 
       // Add new fencers
       if (fencersToAdd.length > 0) {
@@ -234,6 +244,9 @@ function Sessions() {
       }
 
       // Remove deselected fencers
+      const fencersToRemove = Array.from(selectedFencers)
+        .filter(fencerId => existingFencerIds.has(parseInt(fencerId)));
+
       if (fencersToRemove.length > 0) {
         const { error: removeError } = await supabase
           .from('session_fencers')
@@ -249,6 +262,7 @@ function Sessions() {
       fetchSessionFencers(activeSession.id);
       fetchSessions();
     } catch (err) {
+      console.error('Error updating session fencers:', err);
       setError(err.message);
     }
   };
